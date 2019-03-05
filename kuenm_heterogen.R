@@ -6,7 +6,8 @@
 #' 
 #' @param var.stack a RasterStack of environmental variables of region of interest.
 #' @param dist.window (numeric) distance of to be weighted and used for the
-#' moving window. If not defined, \code{ncell.window} must be set.
+#' moving window. If not defined, \code{ncell.window} must be set. The value must be greater
+#' than 0.01...
 #' @param ncell.window (numeric) number of cells to be considered as distance 
 #' and weighted to then be used for the moving window. Ignored if \code{dist.window}
 #' is defined.
