@@ -41,7 +41,9 @@
 
 kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean, 
                             var.normalization = TRUE, rescale.result = TRUE, multi.parallel = FALSE, 
-                            n.cores, comp.each = 5000) {
+                            n.cores, comp.each = 5000, method='wpca', ex.fun = 2) {
+  
+  # 1. Add method
   
   # test for potential problems
   if (missing(var.stack)) {
@@ -193,7 +195,7 @@ kuenm_gwpca <- function(xy.point, xy.coordinates, xy.values, dist.window, var.no
   
   # weighted distance calculations
   g_dist <- ((xy.coordinates[, 1] - xy.point[1])^2 + (xy.coordinates[, 2] - xy.point[2] )^2)
-  w_distance <- exp(-g_dist / (2 * dist.window^2))
+  w_distance <- exp(-g_dist / (2 * dist.window^ex.fun))
   
   # weighted covariance matrix
   if (var.normalization == TRUE){
