@@ -36,7 +36,7 @@
 #' if number in \code{comp.each} is bigger than 5000.  
 #' 
 #' @examples 
-#' 
+#' #
 
 kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean, 
                             var.normalization = TRUE, rescale.result = TRUE, multi.parallel = FALSE, 
