@@ -42,9 +42,17 @@
 
 kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean, 
                             var.normalization = TRUE, rescale.result = TRUE, multi.parallel = FALSE, 
-                            n.cores, comp.each = 5000, method='wpca', ex.fun = 2) {
+                            n.cores, comp.each = 5000, method='gwpca', ex.fun = 2) {
   
   # 1. Add method
+  # Geographically weighted PCA
+  gwpca
+  
+  # Geographically weighted Regression
+  gwr
+  
+  # universal kriging
+  univ.kr
   
   # test for potential problems
   if (missing(var.stack)) {
