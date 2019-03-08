@@ -41,8 +41,8 @@
 #' 
 
 kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean, 
-                            var.normalization = TRUE, rescale.result = TRUE, multi.parallel = FALSE, 
-                            n.cores, comp.each = 5000, ex.fun = 2) {
+                            var.normalization = TRUE, ex.fun = 2, rescale.result = TRUE, 
+                            multi.parallel = FALSE, n.cores, comp.each = 10000) {
   
   # 1. Add method
   # Geographically weighted PCA
@@ -58,13 +58,18 @@ kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean,
   if (missingArg(var.stack)) {
     stop("var.stack is needed. Check function's help for details.")
   }
-  if (missingArg(dist.window) & missing(ncell.window)) {
+  if (missingArg(dist.window) & missingArg(ncell.window)) {
     stop("Either dist.window or ncell.window are needed. Check function's help for details.")
   }
-  if (nlayers.mean > dim(var.stack)[3]) {
-    warning("nlayers.mean is higher than the number of layers in var.stack.\nAll values will be considered for mean calculations.")
+  if (missingArg(nlayers.mean)) {
     nlayers.mean <- dim(var.stack)[3]
+  } else {
+    if (nlayers.mean > dim(var.stack)[3]) {
+      warning("nlayers.mean is higher than the number of layers in var.stack.\nAll PCs will be considered for mean calculations.")
+      nlayers.mean <- dim(var.stack)[3]
+    }
   }
+  
   
   # preparing data
   cat("\nPreparing data for analyses...\n")
@@ -87,26 +92,33 @@ kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean,
   
   if (var.normalization == TRUE){
     #xy_values <- scale(xy_values) 
-    xy_values <- sapply(1:dim(xy_values)[2],function(x) (xy_values[, x] - min(xy_values[, x])) / 
+    xy_values1 <- sapply(1:dim(xy_values)[2],function(x) (xy_values[, x] - min(xy_values[, x])) / 
                           (max(xy_values[, x]) - min(xy_values[, x])))
   }
   
-  if (missingArg(n.cores)) {
-    n.cores <- parallel::detectCores()
+  if(missingArg(n.cores)) {
+    n.cores <- future::availableCores()
   }
   
   # performing claculations
   if (multi.parallel == FALSE) {
+    suppressPackageStartupMessages(library(future))
     suppressPackageStartupMessages(library(doFuture))
     
     cat("\nRunning calculations, please wait...\n")
     
     doFuture::registerDoFuture()
-    future::plan(future::multiprocess(workers = n.cores))
+    
+    if(.Platform$OS.type == "unix") {
+      future::plan(future::tweak(multiprocess, workers = n.cores))
+    } else {
+      future::plan(future::multiprocess)
+    }
     
     gw_pcas <- foreach(i = 1:nrow(xy_coordinates)) %dopar% { 
       kuenm_gwpca(xy.point = xy_coordinates[i, ], xy.coordinates = xy_coordinates, 
-                  xy.values = xy_values, dist.window = dist.window, var.normalization = FALSE)$sdev
+                  xy.values = xy_values, dist.window = dist.window, 
+                  var.normalization = FALSE, ex.fun = ex.fun)$sdev
     }
     
   } else {
@@ -114,7 +126,11 @@ kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean,
     
     cat("\nRunning calculations, please wait...\n")
     
-    future::plan(future::multiprocess(workers = n.cores))
+    if(.Platform$OS.type == "unix") {
+      future::plan(future::tweak(multiprocess, workers = n.cores))
+    } else {
+      future::plan(future::multiprocess)
+    }
     gw_pcas <- new.env()
     
     steps <- seq(1, dim(xy_coordinates)[1], comp.each)
@@ -132,7 +148,8 @@ kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean,
         
         gwpca <- lapply(seq_gwpca, function(y){
           gwp <- kuenm_gwpca(xy.point = xy_coordinates[y, ], xy.coordinates = xy_coordinates, 
-                             xy.values = xy_values, dist.window = dist.window, var.normalization = FALSE)$sdev
+                             xy.values = xy_values, dist.window = dist.window, 
+                             var.normalization = FALSE, ex.fun = ex.fun)$sdev
           return(gwp)
         })
         
@@ -175,6 +192,7 @@ kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean,
 #' moving window.
 #' @param var.normalization (logical) whether or not to apply a noramlization procedure 
 #' to variables when performing the Principal Component Analysis. Default = TRUE.
+#' @param xy.point (numeric) 
 #' 
 #' @return 
 #' A vector containing standar deviations for all principal components.
@@ -186,7 +204,8 @@ kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean,
 #' @examples 
 #' 
 
-kuenm_gwpca <- function(xy.point, xy.coordinates, xy.values, dist.window, var.normalization = TRUE) {
+kuenm_gwpca <- function(xy.point, xy.coordinates, xy.values, dist.window, ex.fun = 2, 
+                        var.normalization = TRUE) {
   
   # testing for potential problems
   if (missingArg(xy.point)) {
