@@ -42,23 +42,23 @@
 
 kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean, 
                             var.normalization = TRUE, rescale.result = TRUE, multi.parallel = FALSE, 
-                            n.cores, comp.each = 5000, method='gwpca', ex.fun = 2) {
+                            n.cores, comp.each = 5000, ex.fun = 2) {
   
   # 1. Add method
   # Geographically weighted PCA
-  gwpca
+  #gwpca
   
   # Geographically weighted Regression
-  gwr
+  #gwr
   
   # universal kriging
-  univ.kr
+  #univ.kr
   
   # test for potential problems
-  if (missing(var.stack)) {
+  if (missingArg(var.stack)) {
     stop("var.stack is needed. Check function's help for details.")
   }
-  if (missing(dist.window) & missing(ncell.window)) {
+  if (missingArg(dist.window) & missing(ncell.window)) {
     stop("Either dist.window or ncell.window are needed. Check function's help for details.")
   }
   if (nlayers.mean > dim(var.stack)[3]) {
@@ -77,11 +77,11 @@ kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean,
   xy_values <- xy_values[, 3:dim(xy_values)[2]] # only values
   
   # preparing other arguments if needed
-  if (missing(dist.window)) { # defining distance if ncel.window was used instead
+  if(missingArg(dist.window))  { # defining distance if ncel.window was used instead
     dist.window <- ncell.window * raster::xres(heter)
   }
   
-  if (missing(nlayers.mean)) {
+  if(missingArg(nlayers.mean)) {
     nlayers.mean <- dim(var.stack)[3]
   }
   
@@ -91,7 +91,7 @@ kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean,
                           (max(xy_values[, x]) - min(xy_values[, x])))
   }
   
-  if (missing(n.cores)) {
+  if (missingArg(n.cores)) {
     n.cores <- parallel::detectCores()
   }
   
@@ -189,16 +189,16 @@ kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean,
 kuenm_gwpca <- function(xy.point, xy.coordinates, xy.values, dist.window, var.normalization = TRUE) {
   
   # testing for potential problems
-  if (missing(xy.point)) {
+  if (missingArg(xy.point)) {
     stop("xy.point is needed. Check function's help for details.")
   }
-  if (missing(xy.coordinates)) {
+  if (missingArg(xy.coordinates)) {
     stop("xy.coordinates is needed. Check function's help for details.")
   }
-  if (missing(xy.values)) {
+  if (missingArg(xy.values)) {
     stop("xy.values is needed. Check function's help for details.")
   }
-  if (missing(dist.window)) {
+  if (missingArg(dist.window)) {
     stop("dist.window is needed. Check function's help for details.")
   }
   
