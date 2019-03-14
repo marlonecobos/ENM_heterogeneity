@@ -14,8 +14,8 @@
 #' @param nlayers.mean (numeric) number of weighted principal components to be 
 #' considered when calculating the mean heterogeneity value per pixel. If not defined,
 #' all principal components will be used.
-#' @param var.normalization (logical) whether or not to apply a noramlization procedure 
-#' to variables when performing the Principal Component Analysis. Default = TRUE.
+#' @param var.scale (logical) whether or not to scale variables in \code{var.stack} 
+#' when performing the Principal Component Analysis. Default = FALSE. See details.
 #' @param rescale.result (logical) whether or not values representing environmental
 #' heterogeneity should be rescaled to values from 0 to 1. Default = TRUE.
 #' @param multi.parallel (logical) whether or not increase the amount of data analyzed 
@@ -34,14 +34,16 @@
 #' By default calculations are parallelized using the doFuture package. However, defining 
 #' the \code{multi.parallel} argument will spead up analyses as more processes are 
 #' performed per processor. Using this option represent higher demands of RAM, especially
-#' if number in \code{comp.each} is bigger than 5000.  
+#' if number in \code{comp.each} is bigger than 5000. 
+#' 
+#' The scaling procedure does not center the variables only scale them from zero to one. 
 #' 
 #' @examples 
 #' 
 #' 
 
 kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean, 
-                            var.normalization = TRUE, ex.fun = 2, rescale.result = TRUE, 
+                            var.scale = TRUE, ex.fun = 2, rescale.result = TRUE, 
                             multi.parallel = FALSE, n.cores, comp.each = 10000) {
   
   # 1. Add method
@@ -90,9 +92,8 @@ kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean,
     nlayers.mean <- dim(var.stack)[3]
   }
   
-  if (var.normalization == TRUE){
-    #xy_values <- scale(xy_values) 
-    xy_values1 <- sapply(1:dim(xy_values)[2],function(x) (xy_values[, x] - min(xy_values[, x])) / 
+  if (var.scale == TRUE){
+    xy_values <- sapply(1:dim(xy_values)[2], function(x) (xy_values[, x] - min(xy_values[, x])) / 
                           (max(xy_values[, x]) - min(xy_values[, x])))
   }
   
@@ -118,11 +119,17 @@ kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean,
     gw_pcas <- foreach(i = 1:nrow(xy_coordinates)) %dopar% { 
       kuenm_gwpca(xy.point = xy_coordinates[i, ], xy.coordinates = xy_coordinates, 
                   xy.values = xy_values, dist.window = dist.window, 
-                  var.normalization = FALSE, ex.fun = ex.fun)$sdev
+                  var.scale = FALSE, ex.fun = ex.fun)$sdev
     }
+    
+    gw_pcas <- do.call(rbind, gw_pcas)
+    gw_pcas <- apply(gw_pcas[, 1:nlayers.mean], 1, mean)
+    
+    future::plan(future::sequential)
     
   } else {
     suppressPackageStartupMessages(library(future))
+    suppressPackageStartupMessages(library(magrittr))
     
     cat("\nRunning calculations, please wait...\n")
     
@@ -146,29 +153,37 @@ kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean,
       gw_pcas[[paso]] %<-% { # try with lists?
         seq_gwpca <- kkk[x]:(kkk[x + 1] - 1)
         
-        gwpca <- lapply(seq_gwpca, function(y){
-          gwp <- kuenm_gwpca(xy.point = xy_coordinates[y, ], xy.coordinates = xy_coordinates, 
-                             xy.values = xy_values, dist.window = dist.window, 
-                             var.normalization = FALSE, ex.fun = ex.fun)$sdev
-          return(gwp)
-        })
+        gwpca <- seq_gwpca %>%
+          purrr::map_df(~data.frame(as.list(kuenm_gwpca(xy.point = xy_coordinates[.x, ], 
+                                                        xy.coordinates = xy_coordinates, 
+                                                        xy.values = data.frame(xy_values), 
+                                                        dist.window = dist.window, 
+                                                        var.scale = FALSE,
+                                                        ex.fun = ex.fun)$sdev[1:nlayers.mean]))) %>% rowMeans(.)
         
-        return(gwpca)
+        cat(paste0(gwpca, "\n"), file = paste0("heterogeneity_temp_", x, ".csv"))
+        
+        return(NULL)
       }
       avance <- (x / long_k) * 100
       cat("Computation progress: ", avance,"%" ,"\n")
     }
     
-    gw_pcas <- as.list(gw_pcas)
-    gw_names <- as.character(sort(as.numeric(names(gw_pcas))))
-    gw_pcas <- gw_pcas[gw_names]
-    gw_pcas <- do.call(c, gw_pcas)
+    future::plan(future::sequential)
+    
+    nfiles <- length(list.files(pattern = "^heterogeneity_temp_"))
+    
+    while(nfiles < x){
+      Sys.sleep(.1)
+      nfiles <- length(list.files(pattern = "^heterogeneity_temp_"))
+    }
+    
+    gw_pcas <- paste0("heterogeneity_temp_", pasos, ".csv") %>% 
+      purrr::map_df(~read.csv(.x, header = F)) %>% .[,1]
+    
+    unlink(paste0("heterogeneity_temp_", pasos, ".csv"))
   }
   
-  future::plan(future::sequential)
-  
-  gw_pcas <- do.call(rbind, gw_pcas)
-  gw_pcas <- apply(gw_pcas[, 1:nlayers.mean], 1, mean)
   
   if (rescale.result == TRUE){
     heter[!is.na(raster::values(heter))] <- scales::rescale(gw_pcas, to = c(0, 1)) 
@@ -190,8 +205,8 @@ kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean,
 #' @param xy.values (matrix) an array of attributes, also as rows
 #' @param dist.window (numeric) distance of to be weighted to be used for the
 #' moving window.
-#' @param var.normalization (logical) whether or not to apply a noramlization procedure 
-#' to variables when performing the Principal Component Analysis. Default = TRUE.
+#' @param var.scale (logical) whether or not to scale variables in \code{xy.values} 
+#' when performing the Principal Component Analysis. Default = FALSE. See details.
 #' @param xy.point (numeric) 
 #' 
 #' @return 
@@ -201,11 +216,13 @@ kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean,
 #' Geographically Weighted Principal Component Analyses is performed following
 #' Author et al. (2010). 
 #' 
+#' The scaling procedure does not center the variables only scale them from zero to one.
+#' 
 #' @examples 
 #' 
 
 kuenm_gwpca <- function(xy.point, xy.coordinates, xy.values, dist.window, ex.fun = 2, 
-                        var.normalization = TRUE) {
+                        var.scale = FALSE) {
   
   # testing for potential problems
   if (missingArg(xy.point)) {
@@ -226,15 +243,14 @@ kuenm_gwpca <- function(xy.point, xy.coordinates, xy.values, dist.window, ex.fun
   w_distance <- exp(-g_dist / (2 * dist.window^ex.fun))
   
   # weighted covariance matrix
-  if (var.normalization == TRUE){
-    #xy.values <- scale(xy.values) 
-    xy.values <- sapply(1:dim(xy.values)[2],function(x) (xy.values[, x] - min(xy.values[, x])) / 
+  if (var.scale == TRUE){
+    xy.values <- sapply(1:dim(xy.values)[2], function(x) (xy.values[, x] - min(xy.values[, x])) / 
                           (max(xy.values[, x]) - min(xy.values[, x])))
   }
   
   st_weights <- zapsmall(w_distance / sum(w_distance)) # Standardize the weights
   y_bar <- colSums(xy.values * st_weights)
-  xy_substracted <- t(xy.values) - y_bar                     # Substarct the sums
+  xy_substracted <- t(xy.values) - y_bar               # Substarct the sums
   cov_matrix <- xy_substracted %*% (st_weights * t(xy_substracted))
   
   # geographically weighted pca
