@@ -111,7 +111,7 @@ kuenm_heterogen <- function(var.stack, dist.window, ncell.window, nlayers.mean,
     doFuture::registerDoFuture()
     
     if(.Platform$OS.type == "unix") {
-      future::plan(future::tweak(multiprocess, workers = n.cores))
+      future::plan(future::multiprocess(workers = n.cores))
     } else {
       future::plan(future::multiprocess)
     }
